@@ -9,11 +9,12 @@ Array.prototype.contains = function(val){
 //图像压缩
 //divid 
 var compressImage = (url,fileName,divid,resolve,fail) => {
-	let name = '_doc/upload/'+divid+'-'+fileName;
+	let name = '_doc/upload/'+divid+'-'+fileName.replace('png','jpg');
 	plus.zip.compressImage({
 		src:url,
 		dst:name,
 		quality:20,
+		format:'jpg',
 		overwrite:true
 	},function(event){
 		resolve && resolve(event);
@@ -32,17 +33,18 @@ var galleryImgs = (options) => {
 	let fail = options.fail;
 	let complete = options.complete;
 	plus.gallery.pick(function(e) {
-	    resolve({tempFilePaths: e.files || (options.sizeType && !options.sizeType.contains('compressed')) && e.files || (function(){
-			let imgs = [];
-			e.files.forEach(async (file)=>{
-				await readFileAndResolve(file,null,(e)=>{imgs.push(e.target);},entryCompressImageResolve);
-			});
-			return imgs;
-		}.bind(this)())});
-	    complete && complete(e);
+		let files = [];
+		Promise.all(e.files.map(file=>new Promise(res=>{
+			readFileAndResolve(file,null,(e)=>{files.push(e.target);res();},entryCompressImageResolve);
+		}))).then(()=>{
+			resolve({tempFilePaths:files});
+		}).then(()=>{
+			complete && complete(e);
+		})
 	}.bind(this), function(e) {
-	   fail && fail(e);
-	   complete && complete(e);
+		new Promise(res=>{fail && fail(e);res();}).then(()=>{
+			complete && complete(e);
+		})
 	}.bind(this), {  
 		filter: "image",
 		multiple: true,
@@ -73,7 +75,7 @@ var getCameraImage = (options) => {
 var readFileAndResolve = (file,type,resolve,entryResolve,fail)=>{
 	//#ifdef APP-PLUS
 	let readType = type || 'TEXT';
-	plus.io.resolveLocalFileSystemURL(file, function(entry) {
+	plus.io.resolveLocalFileSystemURL(file,function(entry) {
 		entryResolve && entryResolve(entry,resolve,fail) || (function(){// 可通过entry对象操作文件 
 			entry.file(function(file){
 				let fileReader = new plus.io.FileReader();
